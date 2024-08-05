@@ -138,11 +138,12 @@ def quantize_tensor(w: torch.tensor, n_bits, group_size, tiling, sym, clip_ratio
         del real_quantized_w, quant_metadata
     else:
         assert quant_type == "int", "Options should be in [int, fp]"
+        dim = None if group_size == -1 else -1  # activate per-tensor quantization
         if sym:
-            w_max = w.abs().amax(dim=-1, keepdim=True).clamp(min=1e-5)
+            w_max = w.abs().amax(dim=dim, keepdim=True).clamp(min=1e-5)
         else:
-            w_max = w.amax(dim=-1, keepdim=True)
-            w_min = w.amin(dim=-1, keepdim=True)
+            w_max = w.amax(dim=dim, keepdim=True)
+            w_min = w.amin(dim=dim, keepdim=True)
 
         if exponential:
             q_max = (2**(2**(n_bits-1)-1))

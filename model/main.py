@@ -108,8 +108,8 @@ if __name__ == '__main__':
         help='Group size of channels that will quantize together. (only for weights now)'
     )
     parser.add_argument(
-        '--act_group_size', type=int, default=0, choices=[0, 64, 128, 256, 384, 768],
-        help='Group size when quantizing activations. Using 128 as default quantization group.'
+        '--act_group_size', type=int, default=0, choices=[-1, 0, 64, 128, 256, 384, 768],
+        help='Group size when quantizing activations. Using 128 as default quantization group. (0: per-token, -1: per-tensor)'
     )
     parser.add_argument(
         '--reorder', action='store_true',
@@ -266,7 +266,7 @@ if __name__ == '__main__':
 
 
     if args.eval_ppl:
-        datasets = ['wikitext2', 'ptb', 'c4']
+        datasets = ['wikitext2', 'ptb', 'c4'][:1]
 
         for dataset in datasets:
             dataloader, testloader = get_loaders(
