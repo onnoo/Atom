@@ -5,6 +5,8 @@ import math
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer, LlamaRMSNorm, LlamaAttention, LlamaMLP
 from quant import Quantizer, fake_quantize_quarter_E5M2, fake_quantize_quarter_E4M3, quantize_tensor, quantize_tensor_channel_group
 from qLinearLayer import QLinearLayer
+from transformers.cache_utils import Cache
+
 
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
@@ -241,7 +243,10 @@ class QLlamaAttention(nn.Module):
 
         kv_seq_len = key_states.shape[-2]
         if past_key_value is not None:
-            kv_seq_len += past_key_value[0].shape[-2]
+            if isinstance(past_key_value, Cache):
+                kv_seq_len += past_key_value.get_seq_length()
+            elif isinstance(past_key_value, tuple):
+                kv_seq_len += past_key_value[0].shape[-2]
         
         # Fake quantize the key_states.
         # Preserve the position embedding info by first quantize.
@@ -255,9 +260,10 @@ class QLlamaAttention(nn.Module):
         # [bsz, nh, t, hd]
 
         if past_key_value is not None:
-            # reuse k, v, self_attention
-            key_states = torch.cat([past_key_value[0], key_states], dim=2)
-            value_states = torch.cat([past_key_value[1], value_states], dim=2)
+            if past_key_value.get_seq_length() > 0:
+                # reuse k, v, self_attention
+                key_states = torch.cat([past_key_value[self.layer_idx][0], key_states], dim=2)
+                value_states = torch.cat([past_key_value[self.layer_idx][1], value_states], dim=2)
 
         past_key_value = (key_states, value_states) if use_cache else None
 

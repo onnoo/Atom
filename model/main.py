@@ -8,10 +8,10 @@ from modelutils_llama import quantize_model_llama, reorder_model_llama, quantize
 from modelutils_opt import quantize_model_opt, reorder_model_opt, quantize_model_gptq_opt,  add_act_quant_wrapper_opt
 from modelutils_mixtral import quantize_model_mixtral, add_act_quant_wrapper_mixtral, reorder_model_mixtral
 from parallel_utils import map_layers_to_multi_gpus
-from LMClass import LMClass
+# from LMClass import LMClass
 from eval import pattern_match
-from lm_eval import tasks as lm_tasks
-from lm_eval import evaluator as lm_evaluator
+# from lm_eval import tasks as lm_tasks
+# from lm_eval import evaluator as lm_evaluator
 
 
 def get_llama(model):
@@ -187,6 +187,17 @@ if __name__ == '__main__':
         '--quant_type', type=str, default='int', choices=['int', 'fp'],
         help='Determine the mapped data format by quant_type + n_bits. e.g. int8, fp4.'
     )
+
+    # Added
+    parser.add_argument(
+        '--pretrained', type=str
+    )
+    parser.add_argument(
+        '--except_layer', action='store_true'
+    )
+    parser.add_argument(
+        '--use_cache', action='store_true'
+    )
     
     args = parser.parse_args()
 
@@ -264,9 +275,87 @@ if __name__ == '__main__':
         else:
             model = quantize_model_func(model, device=DEV, args=args)
 
+    if args.eval_ppl:
+        import json
+        from pathlib import Path
+        from datetime import datetime
+        
+        from act_spike import evaluate, get_prefix_ids
+        from act_spike.utils import load_past_key_values
+        from transformers import AutoTokenizer
+
+        for layer_idx, layer in enumerate(model.model.layers):
+            setattr(layer.self_attn, 'layer_idx', layer_idx)
+
+        model = model.to('cuda')
+        tokenizer = AutoTokenizer.from_pretrained(args.model)
+
+        prefix_ids = get_prefix_ids(tokenizer)
+
+        if args.use_cache:
+            misc_dir = Path('./outputs/misc/', args.pretrained.replace('/', '--'))
+            prefix_path = misc_dir.joinpath('past_key_values.pt')
+            past_key_values = load_past_key_values(model, prefix_path)
+        else:
+            past_key_values = None
+        
+        if args.except_layer:
+            misc_dir = Path('./outputs/misc/', args.pretrained.replace('/', '--'))
+            except_layers_path = misc_dir.joinpath('except_layers.pt')
+            except_layers = json.load(except_layers_path.open())
+
+            for name, _ in except_layers:
+                module_name = 'model.' + name
+
+                if module_name.endswith('down_proj'):
+                    # target: mlp.act_quant
+                    parent_name = module_name[:module_name.rindex('.')]
+                    parent = model.get_submodule(parent_name)  # MLP
+                    parent.act_quant = lambda x: x
+                
+                if module_name.endswith('up_proj'):
+                    # target: post_attention_layernorm.act_quant
+                    module_name = module_name[:module_name.rindex('.')]
+                    parent_name = module_name[:module_name.rindex('.')]
+                    parent = model.get_submodule(parent_name)  # DecoderLayer
+                    parent.post_attention_layernorm.act_quant = lambda x: x
+                
+                if module_name.endswith('o_proj'):
+                    # target: self_attn.act_quant
+                    parent_name = module_name[:module_name.rindex('.')]
+                    parent = model.get_submodule(parent_name)  # ATTN
+                    parent.act_quant = lambda x: x
+                
+                if module_name.endswith('q_proj'):
+                    # target: input_layernorm.act_quant
+                    module_name = module_name[:module_name.rindex('.')]
+                    parent_name = module_name[:module_name.rindex('.')]
+                    parent = model.get_submodule(parent_name)  # DecoderLayer
+                    parent.input_layernorm.act_quant = lambda x: x
+
+        outputs = evaluate(model,
+                           tokenizer,
+                           tasks=['wikitext'],
+                           max_length=2000,
+                           prefix_ids=prefix_ids,
+                           past_key_values=past_key_values)
+        
+        results = outputs['results']
+        results['args'] = args.__dict__
+
+        fname = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.json')
+        save_path = Path('./outputs', fname)
+        if not save_path.parent.exists():
+            save_path.parent.mkdir(parents=True)
+        with open(save_path, 'w') as f:
+            json.dump(outputs, f, indent=2)
+
+    exit()
 
     if args.eval_ppl:
         datasets = ['wikitext2', 'ptb', 'c4'][:1]
+
+        outputs = {}
 
         for dataset in datasets:
             dataloader, testloader = get_loaders(
@@ -276,6 +365,19 @@ if __name__ == '__main__':
             ppl = eval_func(model, testloader, DEV)
 
             print(f"targetResult,{dataset},{ppl:.3f}")
+            outputs[f'ppl_{dataset}'] = ppl
+        outputs['args'] = args.__dict__
+
+        import json
+        from pathlib import Path
+        from datetime import datetime
+        
+        fname = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.json')
+        save_path = Path('./outputs', fname)
+        if not save_path.parent.exists():
+            save_path.parent.mkdir(parents=True)
+        with open(save_path, 'w') as f:
+            json.dump(outputs, f, indent=2)
     
     # eval zero shot accuracy on commonsense datasets
     if args.eval_common_sense:

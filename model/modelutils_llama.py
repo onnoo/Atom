@@ -93,28 +93,28 @@ def add_act_quant_wrapper_llama(model, device, args, scales):
         m = m.to(device)
 
         nameTemplate = 'layers.{}.{}.{}'
-        m.self_attn.act_quant.configure(
+        m.self_attn.act_quant.configure(  # attention output act (= o_proj input act)
             partial(quantize_activation_wrapper, args=args),
             scales[nameTemplate.format(i, 'self_attn', 'o_proj')]
         )
-        m.self_attn.v_quant.configure(
+        m.self_attn.v_quant.configure(  # key output act
             partial(quantize_attn_v_wrapper, args=args),
             None
         )
-        m.self_attn.k_quant.configure(
+        m.self_attn.k_quant.configure(  # key output act
             partial(quantize_attn_k_wrapper, args=args),
             None
         )
 
-        m.mlp.act_quant.configure(
+        m.mlp.act_quant.configure(  # activation_fn output act (= down_proj input act)
             partial(quantize_activation_wrapper, args=args),
             scales[nameTemplate.format(i, 'mlp', 'down_proj')]
         )
-        m.input_layernorm.act_quant.configure(
+        m.input_layernorm.act_quant.configure(  # qkv input act
             partial(quantize_activation_wrapper, args=args),
             scales[nameTemplate.format(i, 'self_attn', 'k_proj')]
         )
-        m.post_attention_layernorm.act_quant.configure(
+        m.post_attention_layernorm.act_quant.configure(  # gate, up input act
             partial(quantize_activation_wrapper, args=args),
             scales[nameTemplate.format(i, 'mlp', 'gate_proj')]
         )
