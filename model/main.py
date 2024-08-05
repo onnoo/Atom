@@ -311,27 +311,27 @@ if __name__ == '__main__':
                     # target: mlp.act_quant
                     parent_name = module_name[:module_name.rindex('.')]
                     parent = model.get_submodule(parent_name)  # MLP
-                    parent.act_quant = lambda x: x
+                    parent.act_quant.configure(lambda x: x, None)
                 
                 if module_name.endswith('up_proj'):
                     # target: post_attention_layernorm.act_quant
                     module_name = module_name[:module_name.rindex('.')]
                     parent_name = module_name[:module_name.rindex('.')]
                     parent = model.get_submodule(parent_name)  # DecoderLayer
-                    parent.post_attention_layernorm.act_quant = lambda x: x
+                    parent.post_attention_layernorm.act_quant.configure(lambda x: x, None)
                 
                 if module_name.endswith('o_proj'):
                     # target: self_attn.act_quant
                     parent_name = module_name[:module_name.rindex('.')]
                     parent = model.get_submodule(parent_name)  # ATTN
-                    parent.act_quant = lambda x: x
+                    parent.act_quant.configure(lambda x: x, None)
                 
                 if module_name.endswith('q_proj'):
                     # target: input_layernorm.act_quant
                     module_name = module_name[:module_name.rindex('.')]
                     parent_name = module_name[:module_name.rindex('.')]
                     parent = model.get_submodule(parent_name)  # DecoderLayer
-                    parent.input_layernorm.act_quant = lambda x: x
+                    parent.input_layernorm.act_quant.configure(lambda x: x, None)
 
         outputs = evaluate(model,
                            tokenizer,
