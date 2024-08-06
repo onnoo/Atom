@@ -198,6 +198,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--use_cache', action='store_true'
     )
+    parser.add_argument(
+        '--eval_c4', action='store_true'
+    )
     
     args = parser.parse_args()
 
@@ -283,6 +286,7 @@ if __name__ == '__main__':
         from act_spike import evaluate, get_prefix_ids
         from act_spike.utils import load_past_key_values
         from transformers import AutoTokenizer
+        from eval_utils import evaluate_c4
 
         for layer_idx, layer in enumerate(model.model.layers):
             setattr(layer.self_attn, 'layer_idx', layer_idx)
@@ -333,12 +337,19 @@ if __name__ == '__main__':
                     parent = model.get_submodule(parent_name)  # DecoderLayer
                     parent.input_layernorm.act_quant.configure(lambda x: x, None)
 
-        outputs = evaluate(model,
-                           tokenizer,
-                           tasks=['wikitext'],
-                           max_length=2000,
-                           prefix_ids=prefix_ids,
-                           past_key_values=past_key_values)
+        if args.eval_c4:
+            outputs = evaluate_c4(model,
+                                  tokenizer,
+                                  seqlen=2000,
+                                  prefix_ids=prefix_ids,
+                                  past_key_values=past_key_values)
+        else:
+            outputs = evaluate(model,
+                               tokenizer,
+                               tasks=['wikitext'],
+                               max_length=2000,
+                               prefix_ids=prefix_ids,
+                               past_key_values=past_key_values)
         
         results = outputs['results']
         results['args'] = args.__dict__
