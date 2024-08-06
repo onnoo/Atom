@@ -10,6 +10,8 @@ from transformers import AutoTokenizer
 
 from eval_model import CacheHFLM
 
+from pathlib import Path
+
 
 def evaluate_c4(model,
                 tokenizer,
@@ -36,7 +38,11 @@ def evaluate_c4(model,
         prefix_ids = torch.LongTensor(prefix_ids).unsqueeze(0).to(device)
         lm.set_prefix_ids(prefix_ids)
 
-    testenc = get_c4_testset(seqlen=seqlen, tokenizer=tokenizer)
+    cached_testenc_path = Path('./outputs/misc/c4_testset_llama.pt')
+    if cached_testenc_path.exists():
+        testenc = torch.load(cached_testenc_path)
+    else:
+        testenc = get_c4_testset(seqlen=seqlen, tokenizer=tokenizer)
 
     nsamples = testenc.numel() // seqlen
     lm.model.eval()
