@@ -201,6 +201,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--eval_c4', action='store_true'
     )
+    parser.add_argument(
+        '--eval_zeroshot', action='store_true'
+    )
     
     args = parser.parse_args()
 
@@ -343,6 +346,13 @@ if __name__ == '__main__':
                                   seqlen=2000,
                                   prefix_ids=prefix_ids,
                                   past_key_values=past_key_values)
+        elif args.eval_zeroshot:
+            outputs = evaluate(model,
+                               tokenizer,
+                               tasks=['piqa', 'lambada_openai', 'hellaswag', 'winogrande'],
+                               max_length=2000,
+                               prefix_ids=prefix_ids,
+                               past_key_values=past_key_values)
         else:
             outputs = evaluate(model,
                                tokenizer,
